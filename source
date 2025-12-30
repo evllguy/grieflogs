@@ -1,0 +1,229 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local guiName = "GriefLoggerUI"
+
+print(("Loading.."))
+if player.PlayerGui:FindFirstChild(guiName) then
+	player.PlayerGui[guiName]:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = guiName
+ScreenGui.Parent = player.PlayerGui
+
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.fromScale(0.135, 0.392)
+MainFrame.Position = UDim2.fromScale(0.005, 0.25)
+MainFrame.BackgroundColor3 = Color3.fromRGB(38,38,38)
+MainFrame.BorderSizePixel = 0
+Instance.new("UICorner", MainFrame)
+local stroke = Instance.new("UIStroke", MainFrame)
+stroke.Thickness = 2.5
+stroke.Color = Color3.fromRGB(91,216,7)
+
+
+local TitleFrame = Instance.new("Frame", MainFrame)
+TitleFrame.Size = UDim2.fromScale(0.792, 0.107)
+TitleFrame.Position = UDim2.fromScale(0.092, 0.035)
+TitleFrame.BackgroundColor3 = Color3.fromRGB(48,48,48)
+TitleFrame.BorderSizePixel = 0
+Instance.new("UICorner", TitleFrame)
+
+local TitleLabel = Instance.new("TextLabel", TitleFrame)
+TitleLabel.Size = UDim2.fromScale(0.99, 0.9)
+TitleLabel.Position = UDim2.fromScale(0, 0.05)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "GRIEF LOGS >:("
+TitleLabel.TextColor3 = Color3.fromRGB(96,255,48)
+TitleLabel.TextScaled = true
+TitleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+
+
+local LogsFrame = Instance.new("ScrollingFrame", MainFrame)
+LogsFrame.Size = UDim2.fromScale(0.8, 0.46)
+LogsFrame.Position = UDim2.fromScale(0.085, 0.18)
+LogsFrame.ScrollBarImageTransparency = 1
+LogsFrame.CanvasSize = UDim2.new(0,0,0,0)
+LogsFrame.BackgroundColor3 = Color3.fromRGB(48,48,48)
+LogsFrame.BorderSizePixel = 0
+Instance.new("UICorner", LogsFrame)
+
+local LogsLayout = Instance.new("UIListLayout", LogsFrame)
+LogsLayout.Padding = UDim.new(0,2)
+LogsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+LogsLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+
+LogsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	LogsFrame.CanvasSize = UDim2.new(0, 0, 0, LogsLayout.AbsoluteContentSize.Y)
+end)
+
+local logs = {}
+
+local function addLog(text)
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -4, 0, 12) 
+	label.BackgroundTransparency = 1
+	label.TextWrapped = true
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.TextColor3 = Color3.fromRGB(200,255,200)
+	label.TextSize = 9 -- smaller font for fitting
+	label.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+	label.Text = text
+	label.Parent = LogsFrame
+
+	table.insert(logs, 1, label)
+	label.LayoutOrder = 0
+	for i = 2, #logs do
+		logs[i].LayoutOrder = i
+	end
+
+	if #logs > 20 then
+		logs[#logs]:Destroy()
+		table.remove(logs, #logs)
+	end
+end
+
+
+local UsernameFrame = Instance.new("Frame", MainFrame)
+UsernameFrame.Size = UDim2.fromScale(0.8, 0.28)
+UsernameFrame.Position = UDim2.fromScale(0.084, 0.68)
+UsernameFrame.BackgroundColor3 = Color3.fromRGB(48,48,48)
+UsernameFrame.BorderSizePixel = 0
+Instance.new("UICorner", UsernameFrame)
+
+
+local InputBox = Instance.new("TextBox", UsernameFrame)
+InputBox.Size = UDim2.fromScale(0.89, 0.28)
+InputBox.Position = UDim2.fromScale(0.05, 0.05)
+InputBox.Text = "Enter usernames.."
+InputBox.BackgroundColor3 = Color3.fromRGB(54,54,54)
+InputBox.TextColor3 = Color3.fromRGB(96,255,48)
+InputBox.ClearTextOnFocus = true
+InputBox.BorderSizePixel = 0
+InputBox.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+Instance.new("UICorner", InputBox)
+
+
+local ListLabel = Instance.new("TextLabel", InputBox)
+ListLabel.Size = UDim2.fromScale(0.95, 1.4)
+ListLabel.Position = UDim2.fromScale(0.02, 1.3)
+ListLabel.BackgroundColor3 = Color3.fromRGB(54,54,54)
+ListLabel.TextColor3 = Color3.fromRGB(96,255,48)
+ListLabel.TextWrapped = true
+ListLabel.TextSize = 10
+ListLabel.Text = ""
+Instance.new("UICorner", ListLabel)
+
+
+local protected = {}
+local watchers = {}
+local hidden = false
+
+local function notify(text)
+	StarterGui:SetCore("SendNotification", {Title="Grief Logger", Text=text, Duration=3})
+end
+
+local function timestamp()
+	return os.date("[%H:%M:%S]")
+end
+
+local function refreshList()
+	local names = {}
+	for name in pairs(protected) do table.insert(names, name) end
+	ListLabel.Text = table.concat(names,", ")
+end
+
+
+local function watchUserBricks(username)
+	if watchers[username] then return end
+	local folder = workspace:FindFirstChild("Bricks") and workspace.Bricks:FindFirstChild(username)
+	if not folder then return end
+
+	watchers[username] = folder.ChildRemoved:Connect(function(brick)
+		if not brick:IsA("BasePart") or brick.Name ~= "Brick" then return end
+
+		addLog(timestamp().." "..username.."'s brick was deleted!")
+
+		local detectedPlayers = {}
+		for _, plr in pairs(Players:GetPlayers()) do
+			if plr.Name ~= username and not protected[plr.Name] and plr.Character then
+				local toolEquipped = plr.Character:FindFirstChildOfClass("Tool")
+				local deleteDetected = false
+				if toolEquipped then
+					if string.find(toolEquipped.Name, "Delete") then
+						deleteDetected = true
+					else
+						local handle = toolEquipped:FindFirstChild("Handle")
+						if handle and handle:IsA("BasePart") then
+							if handle.Color == Color3.fromRGB(196,40,28) then
+								deleteDetected = true
+							end
+						end
+					end
+				end
+				if deleteDetected then
+					table.insert(detectedPlayers, plr.Name)
+				end
+			end
+		end
+
+		if #detectedPlayers > 0 then
+			addLog(timestamp().." Delete tool detected: "..table.concat(detectedPlayers,", "))
+		else
+			addLog(timestamp().." No Delete tool detected at deletion time.")
+		end
+	end)
+end
+
+
+InputBox.FocusLost:Connect(function(enter)
+	if not enter then return end
+	local typed = InputBox.Text
+	InputBox.Text = ""
+	local match = nil
+	for _, plr in pairs(Players:GetPlayers()) do
+		if string.sub(plr.Name:lower(),1,#typed) == typed:lower() then
+			match = plr.Name
+			break
+		end
+	end
+	if match then
+		InputBox.Text = match
+	end
+
+	local name = InputBox.Text
+	if not name or name == "" then return end
+	if not Players:FindFirstChild(name) then
+		notify("Player not found.")
+		return
+	end
+	if protected[name] then
+		protected[name] = nil
+		if watchers[name] then watchers[name]:Disconnect() end
+		watchers[name] = nil
+		notify("Removed protection for "..name)
+	else
+		protected[name] = true
+		watchUserBricks(name)
+		notify("Protected "..name)
+	end
+	refreshList()
+end)
+
+
+UserInputService.InputBegan:Connect(function(input,gp)
+	if gp then return end
+	if input.KeyCode == Enum.KeyCode.Zero then
+		hidden = not hidden
+		local target = hidden and -0.2 or 0.005
+		TweenService:Create(MainFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {Position=UDim2.fromScale(target, MainFrame.Position.Y.Scale)}):Play()
+	end
+end)
+print(("finished loading bro"))

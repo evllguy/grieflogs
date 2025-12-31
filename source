@@ -267,19 +267,27 @@ end
 mouse.Button1Down:Connect(function()
 	local target = mouse.Target
 	if not target or not target:IsA("BasePart") then return end
-	local ownerFolder = target:FindFirstAncestorWhichIsA("Folder")
-	if not ownerFolder then return end
-	if ownerFolder.Parent ~= workspace:FindFirstChild("Bricks") then return end
+	local ownerFolder = target.Parent
+	while ownerFolder and ownerFolder.Parent ~= workspace:FindFirstChild("Bricks") do
+		ownerFolder = ownerFolder.Parent
+	end
+	if not ownerFolder or ownerFolder.Parent ~= workspace:FindFirstChild("Bricks") then return end
 	local ownerName = ownerFolder.Name
+	local ownerPlayer = Players:FindFirstChild(ownerName)
+	local displayName = ownerPlayer and ownerPlayer.DisplayName or ownerName
+	local leftText = ownerPlayer and "" or " (left)"
+
 	local now = tick()
 	if lastClickTime[target] and now - lastClickTime[target] > CLICK_RESET_TIME then
 		clickCounts[target] = 0
 	end
 	lastClickTime[target] = now
 	clickCounts[target] = (clickCounts[target] or 0) + 1
+
 	if clickCounts[target] >= REQUIRED_CLICKS then
 		clickCounts[target] = 0
-		notify("Block owner: "..ownerName)
+		notify("Block owner: "..displayName.." ("..ownerName..")"..leftText)
 		highlightUserBricks(ownerName)
 	end
 end)
+
